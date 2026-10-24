@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased font-sans selection:bg-blue-500/30 selection:text-blue-200;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom scrollbars tối màu êm mắt */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Thẻ Card tông màu Slate tối dịu mắt (Dark Mode chuẩn Facebook/X) */
+.app-card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+}
