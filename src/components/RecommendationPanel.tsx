@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import type { CandidateScore } from '../types/graph';
-import { UserPlus, Check, Users, Sparkles, X, Flame } from 'lucide-react';
+import { UserPlus, Check, Users, Sparkles, X, Flame, Search } from 'lucide-react';
 
 interface RecommendationPanelProps {
   recommendations: CandidateScore[];
   sourceName: string;
   onHighlightCandidate: (candidateId: string | null) => void;
   selectedCandidateId: string | null;
+  activeCandidateId?: string | null;
+  isComplete?: boolean;
+  currentStepIndex?: number;
+  totalSteps?: number;
 }
 
 export const RecommendationPanel: React.FC<RecommendationPanelProps> = ({
@@ -14,6 +18,10 @@ export const RecommendationPanel: React.FC<RecommendationPanelProps> = ({
   sourceName,
   onHighlightCandidate,
   selectedCandidateId,
+  activeCandidateId,
+  isComplete,
+  currentStepIndex = 0,
+  totalSteps = 1,
 }) => {
   const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
@@ -36,39 +44,67 @@ export const RecommendationPanel: React.FC<RecommendationPanelProps> = ({
   const visibleRecommendations = recommendations.filter((r) => !dismissedIds.has(r.candidateId));
 
   return (
-    <div className="app-card p-4 sm:p-5 bg-slate-900 flex flex-col border border-slate-800 shadow-md">
-      {/* Tiêu đề thân thiện & có màu sắc ấm áp */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+    <div className="app-card p-4 sm:p-5 bg-slate-900 flex flex-col border border-slate-800 shadow-md rounded-2xl">
+      {/* Tiêu đề thân thiện & có trạng thái tiến trình */}
+      <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-800 mb-3 gap-2">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-bold shadow-sm shadow-amber-500/20">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-bold shadow-sm shadow-amber-500/20 shrink-0">
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm font-extrabold text-white leading-tight">
-              Những người bạn có thể biết
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-extrabold text-white leading-tight">
+                Những người bạn có thể biết
+              </h3>
+              {isComplete ? (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-bold">
+                  Hoàn tất tìm kiếm
+                </span>
+              ) : (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 font-bold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
+                  Đang phát hiện theo bước {currentStepIndex + 1}/{totalSteps}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-400">
-              Gợi ý kết bạn cho <strong className="text-blue-400">{sourceName}</strong> (kết quả tìm kiếm bạn chung - Tầng 2)
+              {visibleRecommendations.length === 0 ? (
+                <span>Đang duyệt mô phỏng BFS... Chưa phát hiện bạn chung ở bước này.</span>
+              ) : (
+                <span>
+                  Gợi ý kết bạn cho <strong className="text-blue-400">{sourceName}</strong> (tìm thấy{' '}
+                  <strong className="text-amber-300">{visibleRecommendations.length}</strong> ứng viên có bạn chung)
+                </span>
+              )}
             </p>
           </div>
         </div>
 
-        <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-950 text-amber-300 font-bold border border-amber-800/80">
+        <span className="text-xs px-2.5 py-1 rounded-full bg-amber-950 text-amber-300 font-bold border border-amber-800/80">
           {visibleRecommendations.length} gợi ý
         </span>
       </div>
 
-      {/* Danh sách người dùng gợi ý hiển thị dạng lưới ngang trực quan */}
+      {/* Danh sách người dùng gợi ý hiển thị dần theo từng bước */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {visibleRecommendations.length === 0 ? (
-          <div className="text-center py-10 text-slate-400 text-xs italic bg-slate-800/50 rounded-xl border border-slate-700">
-            Không còn gợi ý kết bạn nào.
+          <div className="col-span-full py-10 px-4 text-center bg-slate-800/40 rounded-xl border border-dashed border-slate-700/80 flex flex-col items-center justify-center gap-2 text-slate-400">
+            <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 shadow-inner">
+              <Search className="w-5 h-5 text-amber-400/80 animate-pulse" />
+            </div>
+            <p className="text-xs font-bold text-slate-300">
+              Chưa phát hiện bạn chung ở bước hiện tại ({currentStepIndex + 1} / {totalSteps})
+            </p>
+            <p className="text-[11px] text-slate-400 max-w-md">
+              Khi thuật toán duyệt đến <strong>Tầng 2 (bạn của bạn bè)</strong>, các ứng viên sẽ xuất hiện tại đây theo thời gian thực kèm số lượng bạn chung!
+            </p>
           </div>
         ) : (
           visibleRecommendations.map((item) => {
             const isSelected = selectedCandidateId === item.candidateId;
             const isInvited = invitedIds.has(item.candidateId);
             const isTop1 = item.rank === 1;
+            const isCurrentlyActive = activeCandidateId === item.candidateId;
 
             return (
               <div
@@ -76,14 +112,23 @@ export const RecommendationPanel: React.FC<RecommendationPanelProps> = ({
                 onClick={() =>
                   onHighlightCandidate(isSelected ? null : item.candidateId)
                 }
-                className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer relative ${
                   isSelected
                     ? 'border-amber-400 bg-amber-950/70 shadow-sm ring-2 ring-amber-400/50'
+                    : isCurrentlyActive
+                    ? 'border-amber-400 bg-amber-950/50 shadow-md ring-2 ring-amber-400/80 animate-pulse'
                     : isTop1
                     ? 'bg-gradient-to-r from-amber-950/50 via-slate-800/90 to-slate-800 border-amber-500/50 shadow-2xs hover:border-amber-400'
                     : 'border-slate-800 bg-slate-800/60 hover:border-slate-700 hover:bg-slate-800 shadow-2xs'
                 }`}
               >
+                {/* Huy hiệu vừa cập nhật nếu đang ở bước xét người này */}
+                {isCurrentlyActive && (
+                  <span className="absolute -top-2 right-3 text-[10px] px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black shadow-xs tracking-tight">
+                    ✨ Đang xét duyệt
+                  </span>
+                )}
+
                 <div className="flex items-start justify-between gap-3">
                   {/* Avatar và thông tin */}
                   <div className="flex items-start gap-3">

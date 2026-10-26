@@ -6,12 +6,13 @@ import { ControlBar } from './components/ControlBar';
 import { QueueViewer } from './components/QueueViewer';
 import { RecommendationPanel } from './components/RecommendationPanel';
 import { ComplexityMetric } from './components/ComplexityMetric';
-import type { StudentNode } from './types/graph';
+import { FriendshipManager } from './components/FriendshipManager';
+import type { GraphEdge, StudentNode } from './types/graph';
 import { Users } from 'lucide-react';
 
 export function App() {
   const [nodes, setNodes] = useState<StudentNode[]>(INITIAL_NODES);
-  const edges = INITIAL_EDGES;
+  const [edges, setEdges] = useState<GraphEdge[]>(INITIAL_EDGES);
 
   const [selectedSourceId, setSelectedSourceId] = useState<string>('an');
 
@@ -63,6 +64,56 @@ export function App() {
     setCurrentStepIndex(totalSteps - 1);
   }, [totalSteps]);
 
+  // Thao tác kết bạn / hủy bạn động
+  const handleToggleFriendship = useCallback((sourceId: string, targetId: string) => {
+    setIsPlaying(false);
+    setEdges((prevEdges) => {
+      const existingIndex = prevEdges.findIndex(
+        (e) =>
+          (e.source === sourceId && e.target === targetId) ||
+          (e.source === targetId && e.target === sourceId)
+      );
+
+      if (existingIndex >= 0) {
+        return prevEdges.filter((_, idx) => idx !== existingIndex);
+      } else {
+        const newEdge: GraphEdge = {
+          id: `e-${sourceId}-${targetId}-${Date.now()}`,
+          source: sourceId,
+          target: targetId,
+          label: 'Bạn bè mới',
+        };
+        return [...prevEdges, newEdge];
+      }
+    });
+    setCurrentStepIndex(0);
+    setHighlightCandidateId(null);
+  }, []);
+
+  // Xóa toàn bộ bạn bè của tài khoản được chỉ định
+  const handleClearFriends = useCallback((sourceId: string) => {
+    setIsPlaying(false);
+    setEdges((prevEdges) =>
+      prevEdges.filter((e) => e.source !== sourceId && e.target !== sourceId)
+    );
+    setCurrentStepIndex(0);
+    setHighlightCandidateId(null);
+  }, []);
+
+  // Khôi phục đồ thị gốc
+  const handleResetEdges = useCallback(() => {
+    setIsPlaying(false);
+    setEdges(INITIAL_EDGES);
+    setCurrentStepIndex(0);
+    setHighlightCandidateId(null);
+  }, []);
+
+  // Nút Run demo: Bắt đầu từ đầu và tự động phát từng bước duyệt BFS
+  const handleRunDemo = useCallback(() => {
+    setCurrentStepIndex(0);
+    setIsPlaying(true);
+  }, []);
+
   useEffect(() => {
     if (!isPlaying) return;
 
@@ -97,6 +148,42 @@ export function App() {
     });
     return friendNames;
   }, [edges, selectedSourceId, nodes]);
+
+  // Danh sách gợi ý bạn bè tăng dần theo từng bước duyệt BFS (chỉ hiển thị những ai đã được duyệt tới ở bước hiện tại)
+  const progressiveRecommendations = useMemo(() => {
+    if (!currentStep || !currentStep.candidateMap) return [];
+    const sourceFriendsCount = Math.max(directFriendsOfSource.length, 1);
+
+    const list = Object.values(currentStep.candidateMap).map((cand) => {
+      const candidateNode = nodes.find((n) => n.id === cand.candidateId);
+      const candidateName = cand.candidateName;
+      const candidateRole = candidateNode ? candidateNode.role : 'Sinh viên';
+      const avatarColor = candidateNode ? candidateNode.avatarColor : 'from-amber-500 to-orange-600';
+      const mutualFriendsCount = cand.mutualFriends.length;
+      const matchPercentage = Math.min(
+        Math.round((mutualFriendsCount / sourceFriendsCount) * 100),
+        100
+      );
+
+      return {
+        candidateId: cand.candidateId,
+        candidateName,
+        candidateRole,
+        avatarColor,
+        mutualFriendsCount,
+        mutualFriends: cand.mutualFriends,
+        matchPercentage,
+        rank: 0,
+      };
+    });
+
+    list.sort((a, b) => b.mutualFriendsCount - a.mutualFriendsCount);
+    list.forEach((item, index) => {
+      item.rank = index + 1;
+    });
+
+    return list;
+  }, [currentStep, nodes, directFriendsOfSource.length]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -146,6 +233,19 @@ export function App() {
           onChangeSpeed={setSpeed}
         />
 
+        {/* BẢNG TÙY CHỌN & THAO TÁC KẾT BẠN TRỰC TIẾP */}
+        <FriendshipManager
+          nodes={nodes}
+          edges={edges}
+          selectedSourceId={selectedSourceId}
+          onToggleFriend={handleToggleFriendship}
+          onClearFriends={handleClearFriends}
+          onResetEdges={handleResetEdges}
+          onRunDemo={handleRunDemo}
+          onShowResultsImmediately={handleJumpToEnd}
+          isPlaying={isPlaying}
+        />
+
         {/* KHU VỰC CHÍNH: ĐỒ THỊ BÊN TRÁI (8/12) & TIẾN TRÌNH DUYỆT BFS BÊN PHẢI (4/12) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
           {/* CỘT TRÁI (8/12): Đồ thị trực quan mở rộng */}
@@ -175,10 +275,14 @@ export function App() {
 
         {/* HÀNG DƯỚI: Danh sách kết quả Gợi ý Bạn bè (Những người bạn có thể biết - Tầng 2) */}
         <RecommendationPanel
-          recommendations={executionResult.finalRecommendations}
+          recommendations={progressiveRecommendations}
           sourceName={currentSourceName}
           onHighlightCandidate={setHighlightCandidateId}
           selectedCandidateId={highlightCandidateId}
+          activeCandidateId={currentStep?.activeNeighborId}
+          isComplete={currentStep?.actionType === 'COMPLETE' || currentStepIndex >= totalSteps - 1}
+          currentStepIndex={currentStepIndex}
+          totalSteps={totalSteps}
         />
       </main>
     </div>
